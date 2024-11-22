@@ -60,6 +60,61 @@ void SignalAdapt()
     write(1, "\n", 1);
 }
 
+int IsCFile(char* filename)
+{
+    int p[2];
+    if (pipe(p) < 0) {
+        return -1;
+    }
+
+    int forkValue = fork();
+
+    if (forkValue < 0) {
+        return -1;
+    } else if (forkValue == 0) {
+        close(p[0]);
+        dup2(p[1], 1);
+        close(2);
+
+        execl("/bin/file", "file", filename, NULL);
+        exit(1);
+    }
+    int sonResult;
+    wait(&sonResult);
+
+    if (sonResult == 256) {
+        close(p[0]);
+        return -1;
+    }
+
+    close(p[1]);
+    char buf[FILENAME_MAX + 1];
+    memset(buf, 0, FILENAME_MAX + 1);
+    int readPointer = 0;
+    while (1) {
+        if (readPointer > FILENAME_MAX) {
+            close(p[0]);
+            return -1;
+        }
+
+        int readResult = read(p[0], &buf[readPointer], 100);
+        if (readResult == 0) {
+            break;
+        } else if (readResult > 0) {
+            readPointer += readResult;
+        } else {
+            close(p[0]);
+            return -1;
+        }
+    }
+    close(p[0]);
+    
+    if (strlen(buf) == 0) {
+        return -1;
+    }
+    return strstr(buf, "C source") != NULL;
+}
+
 
 int main(int argc, char** argv)
 {
@@ -89,6 +144,8 @@ int main(int argc, char** argv)
             break;
         }
 
+        int cFileBool = IsCFile(filename);
+
         char messageFile[LEN_BUF_FILE + 1];
         memset(messageFile, 0, LEN_BUF_FILE + 1);
 
@@ -117,7 +174,7 @@ int main(int argc, char** argv)
         wait(&sonResult);
 
         if (sonResult == 256) {
-            write(2, "\nERROR: cant exec ls in son");
+            write(2, "\nERROR: cant exec ls in son\n", 29);
         }
         
         char fileType;
@@ -125,7 +182,7 @@ int main(int argc, char** argv)
         close(fdRead);
 
         if (readBytes) {
-            ++countCompletedFiles;
+            countCompletedFiles += cFileBool;
             switch (fileType) {
             case '-':
                 write(1, "File type: regular file\n", 25);
@@ -161,14 +218,5 @@ int main(int argc, char** argv)
         unlink(messageFile);
     }
 
-    // int forkValue = fork();
-    // if (forkValue == 0) {
-    //     sigaction(SIGINT, &(struct sigaction){.sa_handler = SIG_DFL}, NULL);
-    //     strcpy(buf, "It's son\n");
-    //     write(1, "COOL", 4);
-    //     while (1) {}
-    // }
-    // printf("DAAD");
-    // wait(NULL);
     exit(0);
 }
