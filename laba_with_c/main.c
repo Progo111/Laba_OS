@@ -112,6 +112,7 @@ int IsCFile(char* filename)
     if (strlen(buf) == 0) {
         return -1;
     }
+
     return strstr(buf, "C source") != NULL;
 }
 
@@ -119,7 +120,7 @@ int IsCFile(char* filename)
 int main(int argc, char** argv)
 {
     srand(time(NULL));
-
+    char* array;
     struct sigaction action;
     action.sa_handler = SignalAdapt;
     sigprocmask(0, NULL, &action.sa_mask);
@@ -145,6 +146,10 @@ int main(int argc, char** argv)
         }
 
         int cFileBool = IsCFile(filename);
+
+        if (cFileBool < 0) {
+            write(2, "\nWARNING: can't check file on C source\n", 40);
+        }
 
         char messageFile[LEN_BUF_FILE + 1];
         memset(messageFile, 0, LEN_BUF_FILE + 1);
@@ -182,7 +187,7 @@ int main(int argc, char** argv)
         close(fdRead);
 
         if (readBytes) {
-            countCompletedFiles += cFileBool;
+            countCompletedFiles += cFileBool == 1? 1:0;
             switch (fileType) {
             case '-':
                 write(1, "File type: regular file\n", 25);
