@@ -10,8 +10,7 @@
 
 #define LEN_BUF_FILE 5
 
-
-int countCompletedFiles = 0;
+const char allFileName[] = "all_files_name";
 
 void PrintNum(int num)
 {
@@ -51,13 +50,6 @@ int CheckFile(char* filename) {
     }
     close(fd);
     return 0;
-}
-
-void SignalAdapt()
-{
-    write(1, "\nCount completed files: ", 25);
-    PrintNum(countCompletedFiles);
-    write(1, "\n", 1);
 }
 
 int IsCFile(char* filename)
@@ -116,6 +108,37 @@ int IsCFile(char* filename)
     return strstr(buf, "C source") != NULL;
 }
 
+void SignalAdapt()
+{
+    int countCompletedFiles = 0;
+    write(1, "\nCount completed files: ", 25);
+    char filename[FILENAME_MAX];
+    int fd = open(allFileName, O_RDONLY);
+    
+    while (1) {
+        memset(filename, 0, FILENAME_MAX);
+        int index = 0;
+        while (1) {
+            int readValue = read(fd, &filename[index], 1);
+            if (filename[index] == '\n' || readValue == 0) {
+                filename[index] = 0;
+                break;
+            }
+            index++;
+        }
+
+        if (index == 0) {
+            break;
+        }
+
+        int cFileBool = IsCFile(filename);
+        countCompletedFiles += cFileBool == 1;
+    }
+
+    PrintNum(countCompletedFiles);
+    write(1, "\n", 1);
+    close(fd);
+}
 
 int main(int argc, char** argv)
 {
@@ -126,6 +149,7 @@ int main(int argc, char** argv)
     sigprocmask(0, NULL, &action.sa_mask);
     action.sa_flags = 0;
     sigaction(SIGINT, &action, NULL);
+    int allFilesNameWrite = open(allFileName, O_WRONLY | O_CREAT);
 
     char whileWords[100];
     memset(whileWords, 0, 100);
@@ -143,12 +167,6 @@ int main(int argc, char** argv)
         
         if (strcmp(filename, "$") == 0) {
             break;
-        }
-
-        int cFileBool = IsCFile(filename);
-
-        if (cFileBool < 0) {
-            write(2, "\nWARNING: can't check file on C source\n", 40);
         }
 
         char messageFile[LEN_BUF_FILE + 1];
@@ -187,7 +205,11 @@ int main(int argc, char** argv)
         close(fdRead);
 
         if (readBytes) {
-            countCompletedFiles += cFileBool == 1? 1:0;
+            if (strlen(filename)) {
+                write(allFilesNameWrite, filename, strlen(filename));
+                write(allFilesNameWrite, "\n", 1);
+            }
+
             switch (fileType) {
             case '-':
                 write(1, "File type: regular file\n", 25);
@@ -202,7 +224,7 @@ int main(int argc, char** argv)
                 write(1, "File type: soft link\n", 22);
                 break;
             case 'c':
-                write(1, "File type: character special files\n", 34);
+                write(1, "File type: character special files\n", 36);
                 break;
             case 'b':
                 write(1, "File type: block special files\n", 32);
@@ -223,5 +245,6 @@ int main(int argc, char** argv)
         unlink(messageFile);
     }
 
+    unlink(allFileName);
     exit(0);
 }
